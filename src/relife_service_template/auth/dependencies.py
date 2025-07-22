@@ -45,7 +45,18 @@ async def _get_authenticated_user(
         if not fetch_roles:
             return result
 
+        if not result.is_keycloak_provider:
+            result.keycloak_roles = []
+            return result
+
         user_metadata = user.user.user_metadata
+
+        if not user_metadata.get("provider_id"):
+            raise ValueError("Keycloak provider_id not found in Supabase user metadata")
+
+        if not user_metadata.get("iss"):
+            raise ValueError("Issuer not found in Supabase user metadata")
+
         keycloak_user_id = user_metadata["provider_id"]
         keycloak_url = user_metadata["iss"]
 

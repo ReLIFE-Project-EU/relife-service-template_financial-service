@@ -55,6 +55,17 @@ class AuthenticatedUser(BaseModel):
 
         return self.user.user.email
 
+    @property
+    def is_keycloak_provider(self) -> bool:
+        """Check whether the user has logged in via the Keycloak social login provider."""
+
+        if not self.user.user.identities:
+            return False
+
+        return any(
+            identity.provider == "keycloak" for identity in self.user.user.identities
+        )
+
     def raise_if_not_admin(self):
         """Verify the user has admin privileges or raise an exception."""
 
