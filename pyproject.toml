@@ -1,0 +1,24 @@
+[project]
+name = "relife-service-template"
+version = "0.1.0"
+description = "ReLIFE Service Template"
+readme = "README.md"
+authors = [{ name = "ReLIFE Developer", email = "developers@re-life.eu" }]
+requires-python = ">=3.11"
+dependencies = [
+    "fastapi[standard]>=0.116.1",
+    "httpx>=0.28.1",
+    "pydantic-settings>=2.10.1",
+    "supabase>=2.17.0",
+    "uvicorn>=0.35.0",
+]
+
+[project.scripts]
+run-service = "relife_service_template:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[dependency-groups]
+dev = ["httpx>=0.28.1", "pytest>=8.4.1", "pytest-asyncio>=1.1.0"]
