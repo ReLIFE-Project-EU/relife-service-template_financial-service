@@ -8,6 +8,10 @@ os.environ.setdefault("SUPABASE_URL", "https://test.supabase.co")
 os.environ.setdefault("SUPABASE_KEY", "test_key_123")
 os.environ.setdefault("KEYCLOAK_CLIENT_ID", "test_client")
 os.environ.setdefault("KEYCLOAK_CLIENT_SECRET", "test_secret")
+os.environ.setdefault(
+    "KEYCLOAK_OPENID_CONFIG_URL",
+    "https://test-keycloak.example.com/realms/test/.well-known/openid-configuration",
+)
 
 
 @pytest.fixture
@@ -21,4 +25,7 @@ def mock_settings():
     mock.supabase_key = "test_key"
     mock.keycloak_client_id = "test_client"
     mock.keycloak_client_secret = "test_secret"
+    mock.keycloak_openid_config_url = (
+        "https://test-keycloak.example.com/realms/test/.well-known/openid-configuration"
+    )
     return mock

@@ -22,6 +22,9 @@ class Settings(BaseSettings):
     admin_role_name: str = "relife_admin"
     # Name of the default storage bucket in Supabase
     bucket_name: str = "default_relife_bucket"
+    # Base URL of the Keycloak realm for authentication
+    # Used to construct token, JWKS, and other authentication endpoints
+    keycloak_realm_url: str = "https://relife-identity.test.ctic.es/realms/relife"
 
 
 @lru_cache

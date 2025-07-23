@@ -1,3 +1,4 @@
+import logging
 from typing import Annotated
 
 from fastapi import Depends, HTTPException, status
@@ -6,13 +7,68 @@ from supabase import AsyncClient, create_async_client
 from supabase.client import ClientOptions
 
 from relife_service_template.auth.keycloak import (
-    get_keycloak_token,
-    get_keycloak_user_roles,
+    fetch_user_roles,
+    validate_keycloak_jwt,
 )
 from relife_service_template.config.settings import SettingsDep
-from relife_service_template.models.auth import AuthenticatedUser
+from relife_service_template.models.auth import (
+    AuthenticatedUser,
+    AuthenticationMethod,
+    UniversalUser,
+)
 
 security = HTTPBearer()
+_logger = logging.getLogger("uvicorn")
+
+
+async def _authenticate_with_supabase(
+    token: str, settings: SettingsDep
+) -> AuthenticatedUser:
+    """Authenticate user via Supabase."""
+
+    client = await get_service_client(settings)
+    user_response = await client.auth.get_user(token)
+    universal_user = UniversalUser.from_supabase_user(user_response)
+
+    return AuthenticatedUser(
+        token=token,
+        user=universal_user,
+        authentication_method=AuthenticationMethod.SUPABASE,
+    )
+
+
+async def _authenticate_with_keycloak(
+    token: str, settings: SettingsDep
+) -> AuthenticatedUser:
+    """Authenticate user via Keycloak JWT validation."""
+
+    return await validate_keycloak_jwt(
+        token, settings.keycloak_client_id, settings.keycloak_realm_url
+    )
+
+
+async def _fetch_keycloak_roles(user: AuthenticatedUser, settings: SettingsDep) -> None:
+    """Fetch and attach Keycloak roles to authenticated user."""
+
+    if not user.is_keycloak_provider:
+        user.keycloak_roles = []
+        return
+
+    user_metadata = user.user.user_metadata
+    provider_id = user_metadata.get("provider_id")
+    keycloak_url = user_metadata.get("iss")
+
+    if not provider_id or not keycloak_url:
+        _logger.warning("Missing Keycloak metadata for user %s", user.user_id)
+        user.keycloak_roles = []
+        return
+
+    user.keycloak_roles = await fetch_user_roles(
+        keycloak_url,
+        settings.keycloak_client_id,
+        settings.keycloak_client_secret,
+        provider_id,
+    )
 
 
 async def get_service_client(settings: SettingsDep) -> AsyncClient:
@@ -34,47 +90,51 @@ async def _get_authenticated_user(
     credentials: HTTPAuthorizationCredentials = Depends(security),
     fetch_roles: bool = False,
 ) -> AuthenticatedUser:
-    """Authenticates user and optionally fetches their Keycloak roles."""
+    """Authenticates user with fallback from Supabase to Keycloak.
+
+    Authentication strategy:
+    1. Primary: Attempt authentication via Supabase
+    2. Fallback: If Supabase fails, validate JWT directly against Keycloak
+    3. Role fetching: Optionally fetch Keycloak roles for authorized users
+
+    This dual approach ensures Keycloak users can access the API even if
+    they haven't been synchronized to Supabase.
+    """
+
+    token = credentials.credentials
+    authenticated_user = None
 
     try:
-        token = credentials.credentials
-        client = await get_service_client(settings)
-        user = await client.auth.get_user(token)
-        result = AuthenticatedUser(token=token, user=user)
+        # Primary authentication: Try Supabase first
+        authenticated_user = await _authenticate_with_supabase(token, settings)
+        _logger.debug("User authenticated via Supabase: %s", authenticated_user.user_id)
 
-        if not fetch_roles:
-            return result
+    except Exception as supabase_error:
+        _logger.debug("Supabase authentication failed: %s", str(supabase_error))
 
-        if not result.is_keycloak_provider:
-            result.keycloak_roles = []
-            return result
+        try:
+            # Fallback authentication: Try Keycloak directly
+            authenticated_user = await _authenticate_with_keycloak(token, settings)
 
-        user_metadata = user.user.user_metadata
+            _logger.debug(
+                "User authenticated via Keycloak: %s", authenticated_user.user_id
+            )
 
-        if not user_metadata.get("provider_id"):
-            raise ValueError("Keycloak provider_id not found in Supabase user metadata")
+        except Exception as keycloak_error:
+            _logger.debug("Keycloak authentication failed: %s", str(keycloak_error))
 
-        if not user_metadata.get("iss"):
-            raise ValueError("Issuer not found in Supabase user metadata")
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Supabase and Keycloak authentication failed: Supabase error: '{}', Keycloak error: '{}'".format(
+                    supabase_error, keycloak_error
+                ),
+            )
 
-        keycloak_user_id = user_metadata["provider_id"]
-        keycloak_url = user_metadata["iss"]
+    # Fetch Keycloak roles if requested
+    if fetch_roles:
+        await _fetch_keycloak_roles(authenticated_user, settings)
 
-        realm_client_token = await get_keycloak_token(
-            keycloak_url,
-            settings.keycloak_client_id,
-            settings.keycloak_client_secret,
-        )
-
-        roles = await get_keycloak_user_roles(
-            keycloak_url, realm_client_token, keycloak_user_id
-        )
-
-        result.keycloak_roles = roles
-
-        return result
-    except Exception as e:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=str(e))
+    return authenticated_user
 
 
 async def get_authenticated_user_without_roles(
@@ -118,7 +178,32 @@ async def get_user_client(
     current_user: AuthenticatedUserDep, settings: SettingsDep
 ) -> AsyncClient:
     """Create a Supabase client with user context.
-    This client respects Row Level Security policies based on the user's token."""
+    This client respects Row Level Security policies based on the user's token.
+
+    **Token Compatibility**:
+    - ✅ Supabase-issued tokens (including Keycloak users via Supabase OIDC)
+    - ❌ Direct Keycloak JWT tokens (will raise HTTPException)
+
+    This function uses the authentication_method field to determine token
+    compatibility, which correctly handles Keycloak users who authenticated
+    through Supabase's OIDC integration.
+
+    For direct Keycloak authentication, use ServiceClientDep with explicit
+    permission checks instead of relying on RLS.
+
+    Raises:
+        HTTPException: If the user token is from direct Keycloak authentication
+    """
+
+    if not current_user.has_supabase_compatible_token:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=(
+                "Direct Keycloak authentication tokens are incompatible with Supabase Row Level Security. "
+                "This token was authenticated directly against Keycloak without going through Supabase. "
+                "Use ServiceClientDep with explicit permission validation instead."
+            ),
+        )
 
     client = await create_async_client(
         settings.supabase_url,
@@ -132,13 +217,34 @@ async def get_user_client(
 
 
 ServiceClientDep = Annotated[AsyncClient, Depends(get_service_client)]
-"""Dependency that provides a Supabase client with service role (admin) privileges.
-Use this dependency for operations that require bypassing Row Level Security and need full database access.
-It should only be used for admin or service-level operations.
-Note: This dependency does not authenticate the remote user; it only provides a client with admin privileges.
-To authenticate the remote user, use this dependency together with `AuthenticatedUserWithRolesDep`."""
+"""FastAPI dependency providing unrestricted Supabase database access.
+
+**Security Warning**: This client bypasses all Row Level Security policies
+and has full database access. It does NOT authenticate users.
+
+Security best practices:
+- Always combine with `AuthenticatedUserWithRolesDep` for user verification
+- Validate admin permissions before privileged operations
+- Log administrative actions for audit trails
+- Never expose this client to untrusted code paths
+"""
 
 UserClientDep = Annotated[AsyncClient, Depends(get_user_client)]
-"""Dependency that provides a Supabase client with user context.
-Use this dependency when operations must respect Row Level Security policies based on the authenticated user's token.
-This dependency authenticates the remote user against the Supabase service. If no error is raised, the user is considered authenticated."""
+"""FastAPI dependency providing user-scoped Supabase database access.
+
+This client includes user authentication context and respects Row Level Security
+(RLS) policies. Database operations are automatically filtered based on the
+authenticated user's permissions and data ownership.
+
+**Token Compatibility**:
+- ✅ Supabase-issued tokens (including Keycloak users via Supabase OIDC)
+- ❌ Direct Keycloak JWT tokens (will raise HTTPException)
+
+This dependency uses the authentication_method field to determine token 
+compatibility, which correctly handles Keycloak users who authenticated 
+through Supabase's OIDC integration.
+
+**For direct Keycloak authentication**: Use `ServiceClientDep` with explicit 
+permission validation instead of relying on RLS, as direct Keycloak tokens 
+cannot be validated by Supabase's Row Level Security system.
+"""
