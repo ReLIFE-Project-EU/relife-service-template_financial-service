@@ -2,7 +2,7 @@ from importlib.metadata import version
 
 from fastapi import FastAPI
 
-from relife_service_template.routes import auth, health, storage
+from relife_service_template.routes import auth, examples, health
 
 # Dynamically determine the package name
 package_name = __name__.split(".")[0]
@@ -24,4 +24,4 @@ app = FastAPI(
 
 app.include_router(health.router)
 app.include_router(auth.router)
-app.include_router(storage.router)
+app.include_router(examples.router)

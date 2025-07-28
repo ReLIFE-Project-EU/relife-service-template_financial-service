@@ -1,3 +1,5 @@
+from typing import Any, List
+
 from pydantic import BaseModel
 
 
@@ -16,3 +18,11 @@ class StorageFileInfo(BaseModel):
     size: int
     created_at: str
     public_url: str
+
+
+class TableDataResponse(BaseModel):
+    """Response model for table read endpoint."""
+
+    table_name: str
+    data: List[dict[str, Any]]
+    count: int
