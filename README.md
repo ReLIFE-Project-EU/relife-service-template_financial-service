@@ -35,3 +35,31 @@ All configuration is driven by environment variables:
 > [!WARNING]
 > * The `SUPABASE_KEY` uses the service role key that bypasses Row Level Security (RLS) policies. This should **never** be exposed to clients.
 > * `KEYCLOAK_CLIENT_SECRET` is sensitive and should be properly secured in production environments.
+
+## Authentication Integration Validation
+
+This template includes a validation script to test authentication integration with remote Supabase and Keycloak instances. This tool helps you verify your configuration and troubleshoot authentication issues.
+
+### Usage
+
+```bash
+uv run validate-supabase --email <your-email> --auth-method <method>
+```
+
+### Authentication Methods
+
+| Method            | Description                                                    | Use Case                                    |
+| ----------------- | -------------------------------------------------------------- | ------------------------------------------- |
+| `supabase`        | Email/password authentication via Supabase                     | Testing direct Supabase user authentication |
+| `keycloak-user`   | Username/password via Keycloak (Resource Owner Password Grant) | Testing Keycloak user credentials           |
+| `keycloak-client` | Client credentials via Keycloak (Client Credentials Grant)     | Testing service-to-service authentication   |
+
+### Validation Process
+
+The script performs an end-to-end authentication validation:
+
+1. **Authentication**: Authenticate using the specified method and credentials
+2. **Server Startup**: Launches a temporary API server instance
+3. **Endpoint Verification**: Tests the `/whoami` endpoint with the obtained token
+4. **User Information**: Displays authenticated user details and associated roles
+5. **Cleanup**: Automatically shuts down the temporary server
