@@ -2,6 +2,7 @@ from importlib.metadata import version
 
 from fastapi import FastAPI
 
+from relife_service_template.config.logging import configure_logging
 from relife_service_template.routes import auth, examples, health
 
 # Dynamically determine the package name
@@ -15,6 +16,7 @@ try:
 except ImportError:
     __version__ = "development"
 
+configure_logging()
 
 app = FastAPI(
     title="ReLIFE Service Template",

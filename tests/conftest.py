@@ -3,6 +3,8 @@ from unittest.mock import Mock
 
 import pytest
 
+from relife_service_template.config.logging import configure_logging
+
 # Set test environment variables to avoid validation errors
 os.environ.setdefault("SUPABASE_URL", "https://test.supabase.co")
 os.environ.setdefault("SUPABASE_KEY", "test_key_123")
@@ -29,3 +31,10 @@ def mock_settings():
         "https://test-keycloak.example.com/realms/test/.well-known/openid-configuration"
     )
     return mock
+
+
+@pytest.fixture(autouse=True)
+def setup_logging():
+    """Ensure logging is configured before each test."""
+
+    configure_logging()

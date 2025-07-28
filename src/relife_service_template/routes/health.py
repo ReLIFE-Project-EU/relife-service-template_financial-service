@@ -2,7 +2,11 @@ import time
 
 from fastapi import APIRouter
 
+from relife_service_template.config.logging import get_logger
+
 router = APIRouter(tags=["health"])
+
+logger = get_logger(__name__)
 
 
 @router.get("/health")

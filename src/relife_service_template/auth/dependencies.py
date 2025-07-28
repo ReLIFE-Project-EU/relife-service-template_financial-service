@@ -1,4 +1,3 @@
-import logging
 from typing import Annotated
 
 from fastapi import Depends, HTTPException, status
@@ -10,6 +9,7 @@ from relife_service_template.auth.keycloak import (
     fetch_user_roles,
     validate_keycloak_jwt,
 )
+from relife_service_template.config.logging import get_logger
 from relife_service_template.config.settings import SettingsDep
 from relife_service_template.models.auth import (
     AuthenticatedUser,
@@ -18,7 +18,7 @@ from relife_service_template.models.auth import (
 )
 
 security = HTTPBearer()
-_logger = logging.getLogger("uvicorn")
+logger = get_logger(__name__)
 
 
 async def _authenticate_with_supabase(
@@ -59,7 +59,7 @@ async def _fetch_keycloak_roles(user: AuthenticatedUser, settings: SettingsDep) 
     keycloak_url = user_metadata.get("iss")
 
     if not provider_id or not keycloak_url:
-        _logger.warning("Missing Keycloak metadata for user %s", user.user_id)
+        logger.warning("Missing Keycloak metadata for user", user_id=user.user_id)
         user.keycloak_roles = []
         return
 
@@ -107,21 +107,25 @@ async def _get_authenticated_user(
     try:
         # Primary authentication: Try Supabase first
         authenticated_user = await _authenticate_with_supabase(token, settings)
-        _logger.debug("User authenticated via Supabase: %s", authenticated_user.user_id)
+        logger.debug(
+            "User authenticated via Supabase",
+            user_id=authenticated_user.user_id,
+        )
 
     except Exception as supabase_error:
-        _logger.debug("Supabase authentication failed: %s", str(supabase_error))
+        logger.debug("Supabase authentication failed", error=str(supabase_error))
 
         try:
             # Fallback authentication: Try Keycloak directly
             authenticated_user = await _authenticate_with_keycloak(token, settings)
 
-            _logger.debug(
-                "User authenticated via Keycloak: %s", authenticated_user.user_id
+            logger.debug(
+                "User authenticated via Keycloak",
+                user_id=authenticated_user.user_id,
             )
 
         except Exception as keycloak_error:
-            _logger.debug("Keycloak authentication failed: %s", str(keycloak_error))
+            logger.debug("Keycloak authentication failed", error=str(keycloak_error))
 
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,

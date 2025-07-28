@@ -1,5 +1,3 @@
-import logging
-
 from fastapi import APIRouter, File, HTTPException, UploadFile, status
 
 from relife_service_template.auth.dependencies import (
@@ -7,6 +5,7 @@ from relife_service_template.auth.dependencies import (
     AuthenticatedUserWithRolesDep,
     UserClientDep,
 )
+from relife_service_template.config.logging import get_logger
 from relife_service_template.config.settings import SettingsDep
 from relife_service_template.models.examples import (
     FileUploadResponse,
@@ -16,7 +15,7 @@ from relife_service_template.models.examples import (
 
 router = APIRouter(tags=["examples"])
 
-_logger = logging.getLogger("uvicorn")
+logger = get_logger(__name__)
 
 
 @router.post("/storage", response_model=FileUploadResponse)
@@ -42,7 +41,13 @@ async def upload_file(
             file_options={"content-type": file.content_type},
         )
 
-        _logger.debug("Uploaded file: %s", response.full_path)
+        logger.info(
+            "File uploaded successfully",
+            file_path=response.full_path,
+            user_id=current_user.user_id,
+            filename=file.filename,
+            content_type=file.content_type,
+        )
 
         public_url = await supabase.storage.from_(settings.bucket_name).get_public_url(
             file_path
