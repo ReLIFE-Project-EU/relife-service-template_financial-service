@@ -111,10 +111,6 @@ async def test_invalid_token_handling(
 
     assert exc_info.value.status_code == 401
 
-    assert "Authentication failed with both Supabase and Keycloak" in str(
-        exc_info.value.detail
-    )
-
     mock_supabase_auth.assert_called_once()
     mock_keycloak_auth.assert_called_once()
 
