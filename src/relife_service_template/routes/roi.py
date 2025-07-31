@@ -1,8 +1,8 @@
 
 from fastapi import APIRouter, Depends, HTTPException
-from models.roi import ROIRequest, ROIResponse
-from services.roi import calculate_roi
-from auth.dependencies import get_authenticated_user_without_roles as get_current_user
+from relife_service_template.models.roi import ROIRequest, ROIResponse
+from relife_service_template.services.roi import calculate_roi
+from relife_service_template.auth.dependencies import get_authenticated_user_without_roles as get_current_user
 
 router = APIRouter(
     prefix="/financial",

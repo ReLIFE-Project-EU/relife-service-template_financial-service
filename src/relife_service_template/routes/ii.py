@@ -1,8 +1,8 @@
 
 from fastapi import APIRouter, Depends, HTTPException
-from models.ii import IIRequest, IIResponse
-from services.ii import calculate_ii
-from auth.dependencies import get_authenticated_user_without_roles as get_current_user
+from relife_service_template.models.ii import IIRequest, IIResponse
+from relife_service_template.services.ii import calculate_ii
+from relife_service_template.auth.dependencies import get_authenticated_user_without_roles as get_current_user
 
 router = APIRouter(
     prefix="/financial",
