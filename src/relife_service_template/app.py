@@ -6,6 +6,7 @@ from relife_service_template.config.logging import configure_logging
 from relife_service_template.routes import auth, examples, health
 
 from relife_service_template.routes.npv import router as npv_router
+from relife_service_template.routes.ii import router as ii_router
 
 # Dynamically determine the package name
 package_name = __name__.split(".")[0]
@@ -26,7 +27,7 @@ app = FastAPI(
     version=__version__,
 )
 
-app = FastAPI()
+#app = FastAPI()
 
 @app.get("/")
 async def read_root():
@@ -37,4 +38,7 @@ async def read_root():
 app.include_router(health.router)
 app.include_router(auth.router)
 app.include_router(examples.router)
+
+#Financial service endpoints
 app.include_router(npv_router)
+app.include_router(ii_router)
