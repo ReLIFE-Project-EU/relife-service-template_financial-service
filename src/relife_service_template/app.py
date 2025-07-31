@@ -7,6 +7,9 @@ from relife_service_template.routes import auth, examples, health
 
 from relife_service_template.routes.npv import router as npv_router
 from relife_service_template.routes.ii import router as ii_router
+from relife_service_template.routes.opex import router as opex_router
+from relife_service_template.routes.roi import router as roi_router
+from relife_service_template.routes.irr import router as irr_router
 
 # Dynamically determine the package name
 package_name = __name__.split(".")[0]
@@ -42,3 +45,6 @@ app.include_router(examples.router)
 #Financial service endpoints
 app.include_router(npv_router)
 app.include_router(ii_router)
+app.include_router(opex_router)
+app.include_router(roi_router)
+app.include_router(irr_router)
